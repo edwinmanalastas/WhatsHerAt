@@ -43,9 +43,31 @@ def extract_media_url_from_tweet(tweet_url):
                 elif media['type'] == 'video':  # If the media is a video
                     # Check if 'variants' exists in the media data
                     if 'variants' in media:
-                        # Find the video with the highest quality (highest bitrate)
-                        video_url = max(media['variants'], key=lambda x: x.get('bitrate', 0))['url']
-                        media_urls.append({'url': video_url, 'type': 'video'})
+
+                        def get_resolution_area(variant):
+                            url = variant.get('url', '')
+                            match = re.search(r'(\d+)x(\d+)', url)  # Look for resolution pattern like 1280x720
+                            if match:
+                                width, height = map(int, match.groups())
+                                return width * height
+                            return 0
+                        
+                        # Sort by bitrate to get the highest quality variant/video
+                        sorted_variants = sorted(
+                            media['variants'],
+                            key=lambda x: x.get('bitrate', get_resolution_area(x)),  # Use resolution area as fallback
+                            reverse=True
+                        )
+                        
+                        # Log the sorted variants for verification
+                        #for variant in sorted_variants:
+                        #    bitrate = variant.get('bitrate', 'No bitrate')
+                        #    resolution = get_resolution_area(variant)
+                        #    print(f"Bitrate: {bitrate} Resolution: {resolution} URL: {variant.get('url', 'No URL')}")
+
+                        highest_quality_video = sorted_variants[0]['url']
+                        media_urls.append({'url': highest_quality_video, 'type': 'video'})
+                        
                     else:
                         print(f"Video variants not available for media {media['media_key']}")
             return media_urls
@@ -143,6 +165,7 @@ def download_parts(url, output_filename):
 
 # Function to process the image, detect faces and filter by gender
 def process_image(image_path):
+    min_dim = 60
     # Load the image
     image = cv2.imread(image_path)
 
@@ -169,16 +192,17 @@ def process_image(image_path):
                 print("Face region details:", region)    
 
                 # Safely extract x, y, w, h values with defaults in case keys are missing
-                x = region.get('x', 0)
-                y = region.get('y', 0)
-                w = region.get('w', 0)
-                h = region.get('h', 0)
+                x, y, w, h = safe_extract_with_padding(region, image)
 
                 # Check if the dimensions are valid (non-zero width and height)
                 if w > 0 and h > 0:
 
                     # Crop the face from the image
                     cropped_face = image[y:y+h, x:x+w]
+
+                    # Resize if the cropped face is smaller than 60x60
+                    if cropped_face.shape[0] < min_dim or cropped_face.shape[1] < min_dim:
+                        cropped_face = cv2.resize(cropped_face, (min_dim, min_dim))
 
                     # Save the cropped face as a new image
                     face_filename = 'detected_woman_face.jpg'
@@ -194,6 +218,7 @@ def process_image(image_path):
     
 # Function to process the video and detect faces in each frame
 def process_video(video_path):
+    min_dim = 60
     # Open the video file
     video_capture = cv2.VideoCapture(video_path)
 
@@ -231,16 +256,17 @@ def process_video(video_path):
                     print("Face region details:", region)    
 
                     # Safely extract x, y, w, h values with defaults in case keys are missing
-                    x = region.get('x', 0)
-                    y = region.get('y', 0)
-                    w = region.get('w', 0)
-                    h = region.get('h', 0)
+                    x, y, w, h = safe_extract_with_padding(region, frame)
 
                     # Check if the dimensions are valid (non-zero width and height)
                     if w > 0 and h > 0:
 
                         # Crop the face from the frame
                         cropped_face = frame[y:y+h, x:x+w]
+
+                        # Resize if the cropped face is smaller than 60x60
+                        if cropped_face.shape[0] < min_dim or cropped_face.shape[1] < min_dim:
+                            cropped_face = cv2.resize(cropped_face, (min_dim, min_dim))
 
                         # Save the cropped face as a new image
                         face_filename = f"detected_woman_face_{frame_count}.jpg"
@@ -262,6 +288,28 @@ def process_video(video_path):
     video_capture.release()
     print("Video processing complete.")
 
+# Safely extract x, y, w, h values with padding and ensure they are within bounds
+def safe_extract_with_padding(region, image, min_dim=60, padding=10):
+    img_h, img_w, _ = image.shape
+
+    # Extract x, y, w, h with defaults and add padding
+    x = max(region.get('x', 0) - padding, 0)
+    y = max(region.get('y', 0) - padding, 0)
+    w = region.get('w', 0) + 2 * padding
+    h = region.get('h', 0) + 2 * padding
+
+    # Ensure the dimensions don't exceed image boundaries
+    w = min(w, img_w - x)
+    h = min(h, img_h - y)
+
+    # Ensure minimum size
+    if w < min_dim:
+        w = min_dim
+    if h < min_dim:
+        h = min_dim
+
+    # Return adjusted coordinates and dimensions
+    return x, y, w, h
 
 if __name__ == "__main__":
     # Test tweet URL
