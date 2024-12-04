@@ -1,3 +1,5 @@
+tweepy
+requests
+Pillow
 deepface
 opencv-python
-matplotlib
