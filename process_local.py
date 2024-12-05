@@ -151,7 +151,7 @@ def safe_extract_with_padding(region, image, min_dim=60, padding=10):
 
 if __name__ == "__main__":
     # Path to the image or video
-    input_path = '/Users/edwin/Projects/WhatsHerAt/video.mp4' 
+    input_path = './photo.jpg' 
 
     # Check if it's an image or a video based on the file extension
     if input_path.lower().endswith(('.jpg', '.jpeg', '.png')):

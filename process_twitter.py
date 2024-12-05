@@ -3,18 +3,26 @@ import requests
 import time
 from io import BytesIO
 from PIL import Image
+from dotenv import load_dotenv
 import os
 import re
 import cv2
 from deepface import DeepFace
 
+load_dotenv()
+BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
+CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
+ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
+
 # Twitter API credentials
 client = tweepy.Client(
-    bearer_token='AAAAAAAAAAAAAAAAAAAAACJkxQEAAAAAeMQafWj8B3ipZgXFzqqjdTDIXhA%3DwVrt7ZNaYAdVgovYtsKhv5qbIOQHtZ9Iy6LeCjAFQzIxjCRmV0',
-    consumer_key='JU9roAfJIzPFrS6AkTgiDUd4K',
-    consumer_secret='Vu01eFKoL4TbyyXTt3V7HfZ8m9XBAwu42fgsvIcZuupQd1Drkg',
-    access_token='1864180044115136513-k2KEGgIG6xjIql9FtIYXCAZZeIajBW',
-    access_token_secret='2r1GgQNtwJCXu9YpTxiPLjcmyf83FSiSYl0gmoqPNUHA7'
+    bearer_token=BEARER_TOKEN,
+    consumer_key=CONSUMER_KEY,
+    consumer_secret=CONSUMER_SECRET,
+    access_token=ACCESS_TOKEN,
+    access_token_secret=ACCESS_SECRET
 )
 
 # Function to extract media URL from tweet URL
@@ -174,6 +182,8 @@ def process_image(image_path):
         print(f"Error: Failed to load image from {image_path}.")
         return
     
+    woman_detected = False
+    
     # Use DeepFace to analyze the image for faces and gender
     try:  
         analysis = DeepFace.analyze(image, actions=['gender'], enforce_detection=False)
@@ -185,6 +195,7 @@ def process_image(image_path):
 
             # If the face is of a woman, save the image
             if gender == 'Woman':
+                woman_detected = True
                 print("Saving the woman's face...")
 
                 # Extract the face coordinates safely
@@ -211,6 +222,9 @@ def process_image(image_path):
                     # return face_filename  # Return the saved image file name
                 else:
                     print("Invalid face region dimensions. Skipping cropping.")
+
+        if not woman_detected:
+            print("No woman was detected in the image.")
 
         print("Image processing complete.")
     except Exception as e:
@@ -284,6 +298,9 @@ def process_video(video_path):
         if first_woman_detected:
             break
 
+    if not first_woman_detected:
+        print("No woman was detected in the video.")
+
     # Release the video capture object
     video_capture.release()
     print("Video processing complete.")
@@ -313,7 +330,7 @@ def safe_extract_with_padding(region, image, min_dim=60, padding=10):
 
 if __name__ == "__main__":
     # Test tweet URL
-    tweet_url = 'https://x.com/PickUpsDaniel/status/1732811707406303243'  # Replace with the tweet URL for testing
+    tweet_url = 'https://x.com/TheNBACentel/status/1863993022720942249'  # Replace with the tweet URL for testing
     
     # Extract media URL from the tweet
     media_urls = extract_media_url_from_tweet(tweet_url)
