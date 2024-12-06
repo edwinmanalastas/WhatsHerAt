@@ -3,3 +3,4 @@ requests
 Pillow
 deepface
 opencv-python
+python-dotenv

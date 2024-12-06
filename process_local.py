@@ -148,7 +148,7 @@ def safe_extract_with_padding(region, image, min_dim=60, padding=10):
 
     # Return adjusted coordinates and dimensions
     return x, y, w, h
-
+    
 if __name__ == "__main__":
     # Path to the image or video
     input_path = './photo.jpg' 
