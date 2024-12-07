@@ -8,7 +8,7 @@ load_dotenv()
 APITOKEN = os.getenv("FACECHECK_API_TOKEN")
 
 # Download the photo of the person you want to find
-image_file = './photo.jpg' 
+image_file = './face.jpg' 
 
 def search_by_face(image_file):
     if TESTING_MODE:
@@ -39,11 +39,14 @@ def search_by_face(image_file):
 # Search the Internet by face
 error, urls_images = search_by_face(image_file)
 
+urls = [] 
+
 if urls_images:
     for im in urls_images:      # Iterate search results
         score = im['score']     # 0 to 100 score how well the face is matching found image
         url = im['url']         # url to webpage where the person was found
         image_base64 = im['base64']     # thumbnail image encoded as base64 string
-        print(f"{score} {url} {image_base64[:32]}...")
+        #print(f"{score} {url} {image_base64[:32]}...")
+        urls.append(url)
 else:
     print(error)
