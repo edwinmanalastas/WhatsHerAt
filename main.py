@@ -81,8 +81,16 @@ def reply_to_mentions():
                         original_author = original_tweet.includes["users"][0]
                         original_tweet_link = f"https://twitter.com/{original_author.username}/status/{referenced_tweet_id}"
                         print(f"Original tweet being replied to: {original_tweet_link}")
-
                         print(f"Processing media from: {original_tweet_link}")
+
+                        # Check and delete old files
+                        if os.path.exists("media.mp4"):
+                            os.remove("media.mp4")
+                            print("Deleted old media.mp4 file.")
+                        if os.path.exists("face.jpg"):
+                            os.remove("face.jpg")
+                            print("Deleted old face.jpg file.")
+
                         # Download media using yt-dlp
                         downloaded_media_path = download_twitter_media(original_tweet_link, output_filename="media")
 
