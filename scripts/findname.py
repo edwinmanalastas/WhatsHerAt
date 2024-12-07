@@ -2,12 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from collections import Counter
 import re
-
-urls = [
-    'youtube.com',
-    'google.com',
-    'facebook.com'
-]
+from facecheck import urls
 
 # Function to extract text from a webpage
 def extract_text(url):
@@ -51,12 +46,13 @@ name_counts = Counter(normalized_names)
 # Sort and display the most common names
 most_common_names = name_counts.most_common(10)
 
+print("\nMentioned and Counts")
 # prints lists of common names
-#for name, count in most_common_names:
-    #print(f"{name.title()}: {count}")
+for name, count in most_common_names:
+    print(f"{name.title()}: {count}")
 
 # Load female names from the file
-with open('females.txt', 'r') as file:
+with open('names.txt', 'r') as file:
     female_names = set(name.strip().lower() for name in file.readlines())
 
 # Check which of the most common names are likely female names
@@ -68,7 +64,7 @@ for name, count in most_common_names:
 
 # Display the female names with counts
 # print("\nMost common female name:")
+print("\nMost common female:")
 for name, count in female_name_results:
     # print(f"{name}: {count}")
     print(f"{name}")
-    break

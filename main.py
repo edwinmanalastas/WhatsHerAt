@@ -6,8 +6,9 @@ from collections import Counter
 from dotenv import load_dotenv
 
 import tweepy
-import yt_dlp
 import cv2
+from io import BytesIO
+from PIL import Image
 from deepface import DeepFace
 import requests
 from bs4 import BeautifulSoup
@@ -30,7 +31,6 @@ client = tweepy.Client(
 
 # file to store processed tweet IDs
 PROCESSED_TWEETS_FILE = "processed_tweets.json"
-REPLIED_TWEETS_FILE = "replied_tweets.json"
 
 # Load processed tweet IDs from the file
 def load_processed_tweets():
@@ -64,37 +64,70 @@ def reply_to_mentions():
                 # Skip tweets already processed
                 if tweet.id in processed_tweets:
                     continue
-
                 try:
-                    # Check if the tweet is a reply and get the parent tweet ID
-                    referenced_tweet_id = None
-                    if tweet.referenced_tweets:
-                        for ref_tweet in tweet.referenced_tweets:
-                            if ref_tweet["type"] == "replied_to":
-                                referenced_tweet_id = ref_tweet["id"]
+                    
+                    # Check if the tweet is a reply and get the parent tweet ID                    
+                    referenced_tweet_id = next(
+                        (ref_tweet["id"] for ref_tweet in tweet.referenced_tweets if ref_tweet["type"] == "replied_to"), 
+                        None
+                    )
 
                     # Fetch the original tweet's details if it's a reply
                     if referenced_tweet_id:
                         original_tweet = client.get_tweet(
-                            referenced_tweet_id, expansions="author_id"
+                            referenced_tweet_id, 
+                            expansions=["author_id", "attachments.media_keys"], 
+                            media_fields=["url", "type", "variants"]
                         )
+
                         original_author = original_tweet.includes["users"][0]
                         original_tweet_link = f"https://twitter.com/{original_author.username}/status/{referenced_tweet_id}"
                         print(f"Original tweet being replied to: {original_tweet_link}")
                         print(f"Processing media from: {original_tweet_link}")
 
                         # Check and delete old files
-                        if os.path.exists("media.mp4"):
+                        if os.path.exists("media_1.mp4"):
                             os.remove("media.mp4")
-                            print("Deleted old media.mp4 file.")
+                            print("Deleted old media_1.mp4 file.")
                         if os.path.exists("face.jpg"):
                             os.remove("face.jpg")
                             print("Deleted old face.jpg file.")
 
-                        # Download media using yt-dlp
-                        downloaded_media_path = download_twitter_media(original_tweet_link, output_filename="media")
+                        media_urls = []
+                        if original_tweet.includes and 'media' in original_tweet.includes:
+                            for media in original_tweet.includes['media']:
+                                print("Media found:", media)  # Debug: Print media to check content
+                                if media['type'] == 'photo':  # If the media is a photo
+                                    media_urls.append({'url': media['url'], 'type': 'image'})
+                                elif media['type'] == 'video':  # If the media is a video
+                                    # Check if 'variants' exists in the media data
+                                    if 'variants' in media:
+                                        # Find the video with the highest quality (highest bitrate)
+                                        video_url = max(media['variants'], key=lambda x: x.get('bitrate', 0))['url']
+                                        media_urls.append({'url': video_url, 'type': 'video'})
+                                else:
+                                    print(f"Unsupported media type or missing variants for media {media['media_key']}.")
+                        
+                        if not media_urls:
+                            print(f"No media URLs found in tweet ID {tweet.id}. Includes: {mentions.includes.get('media', [])}")
 
-                        # Extract a timestamp if mentioned in the tweet (e.g., "0:39")
+                        downloaded_media_path = None
+                        if media_urls:
+                            for index, media in enumerate(media_urls):
+                                download_path = f"media_{index + 1}"
+                                #download_path = f"media"
+                                
+                                # Handle download for images
+                                if media['type'] == 'image':
+                                    download_path += '.jpg'  # Save images as .jpg files
+                                elif media['type'] == 'video':
+                                    download_path += '.mp4'  # Save videos as .mp4 files
+
+                                downloaded_media_path = download_media(media['url'], media['type'], download_path)
+                        else:
+                            print("No media found to download.1")
+                        
+                         # Extract a timestamp if mentioned in the tweet (e.g., "0:39")
                         tweet_text = tweet.text
                         start_time = None
                         timestamp_match = re.search(r'\b(\d+):(\d{2})\b', tweet_text)
@@ -110,7 +143,7 @@ def reply_to_mentions():
                             else:
                                 print("Unsupported media type.")
                         else:
-                            print("No media found to download.")
+                            print("No media found to download.2")
 
                         image_path = "./face.jpg"
                         urls = facecheck(image_path)
@@ -142,26 +175,6 @@ def reply_to_mentions():
         sleep_time = reset_time - int(time.time())
         print(f"Sleeping for {sleep_time} seconds.")
         time.sleep(max(sleep_time, 0))  # Wait until the limit resets
-
-
-# Function to download Twitter media using yt-dlp
-def download_twitter_media(tweet_url, output_filename="media"):
-    """
-    Downloads media (videos/images) from a given Twitter URL using yt-dlp.
-    """
-    ydl_opts = {
-        'outtmpl': f'{output_filename}.%(ext)s',  # Save as "media.<extension>" in the current folder
-        'format': 'bestvideo+bestaudio/best',  # Download the best quality video with audio
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([tweet_url])
-        print(f"Media downloaded successfully and saved as {output_filename}.")
-        return f"{output_filename}.mp4"  # Return the downloaded file path
-    except Exception as e:
-        print(f"Error downloading media: {e}")
-        return None
-
 
 # Function to process the image, detect faces, and filter by gender
 def process_image(image_path):
@@ -346,7 +359,7 @@ def findname(urls):
         #print(f"{name.title()}: {count}")
 
     # Load female names from the file
-    with open('females.txt', 'r') as file:
+    with open('names.txt', 'r') as file:
         female_names = set(name.strip().lower() for name in file.readlines())
 
     # Check which of the most common names are likely female names
@@ -411,7 +424,86 @@ def facecheck(image_file):
     
     return urls
 
+def download_media(media_url, media_type, download_path):
+    try:
+        # Download the media (image or video)
+        response = requests.get(media_url)
+        response.raise_for_status()  # Raise an error if the request fails
+
+        if media_type == 'image':
+            # Save the image
+            img_data = BytesIO(response.content)
+            img = Image.open(img_data)
+            img.save(download_path)
+            print(f"Image downloaded and saved to {download_path}")
+        elif media_type == 'video':
+            # Check if the video is a single MP4 or multipart (m4s)
+            if "m3u8" in media_url or "container=fmp4" in media_url:
+                print("Video is multipart, downloading in parts.")
+                download_parts(media_url, download_path)
+            else:
+                # Save the simple MP4 video
+                with open(download_path, 'wb') as f:
+                    f.write(response.content)
+                print(f"Video downloaded and saved to {download_path}")
+        return download_path
+    except Exception as e:
+        print(f"Error downloading media: {e}")
+        return None
+
+def download_parts(url, output_filename):
+    video_part_prefix = "https://video.twimg.com"
+
+    # Get the video part URL from the container
+    resp = requests.get(url, stream=True)
+    pattern = re.compile(r'(/[^\n]*/(\d+x\d+)/[^\n]*container=fmp4)')
+    matches = pattern.findall(resp.text)
+
+    # Choose the best resolution
+    max_res = 0
+    max_res_url = None
+    for match in matches:
+        url, resolution = match
+        width, height = resolution.split('x')
+        res = int(width) * int(height)
+        if res > max_res:
+            max_res = res
+            max_res_url = url
+
+    assert max_res_url is not None, f'Failed to find a video part URL from {url}'
+
+    # Now download the chosen video part
+    resp = requests.get(video_part_prefix + max_res_url, stream=True)
+    mp4_pattern = re.compile(r'(/[^\n]*\.mp4)')
+    mp4_parts = mp4_pattern.findall(resp.text)
+
+    assert len(mp4_parts) == 1, f'Multiple MP4 parts found, expected only 1. Tweet URL: {url}'
+
+    mp4_url = video_part_prefix + mp4_parts[0]
+    m4s_part_pattern = re.compile(r'(/[^\n]*\.m4s)')
+    m4s_parts = m4s_part_pattern.findall(resp.text)
+
+    # Save the video part
+    with open(output_filename, 'wb') as f:
+        r = requests.get(mp4_url, stream=True)
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
+                f.flush()
+
+        for part in m4s_parts:
+            part_url = video_part_prefix + part
+            r = requests.get(part_url, stream=True)
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+                    f.flush()
+
+    print(f"Video downloaded and saved to {output_filename}")
+    return output_filename
+
+
 # Continuously check for new mentions
 while True:
     reply_to_mentions()
-    time.sleep(300)  # Check every 5 minutes
+    break
