@@ -4,6 +4,15 @@ from dotenv import load_dotenv
 import os
 import json
 
+import yt_dlp
+import cv2
+from deepface import DeepFace
+import re
+
+import requests
+from bs4 import BeautifulSoup
+from collections import Counter
+
 load_dotenv()
 BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
@@ -20,40 +29,41 @@ client = tweepy.Client(
     access_token_secret=ACCESS_SECRET
 )
 
-# file to store replied tweet IDs
+# file to store processed tweet IDs
+PROCESSED_TWEETS_FILE = "processed_tweets.json"
 REPLIED_TWEETS_FILE = "replied_tweets.json"
 
-# Load replied tweet IDs from the file
-def load_replied_tweets():
-    if os.path.exists(REPLIED_TWEETS_FILE) and os.path.getsize(REPLIED_TWEETS_FILE) > 0:
-        with open(REPLIED_TWEETS_FILE, "r") as file:
+# Load processed tweet IDs from the file
+def load_processed_tweets():
+    if os.path.exists(PROCESSED_TWEETS_FILE) and os.path.getsize(PROCESSED_TWEETS_FILE) > 0:
+        with open(PROCESSED_TWEETS_FILE, "r") as file:
             return set(json.load(file))
     else:
         # If file does not exist or is empty, return an empty set
         return set()
-    
-# Save replied tweet IDs to the file
-def save_replied_tweets(tweet_ids):
-    with open(REPLIED_TWEETS_FILE, "w") as file:
+
+# Save processed tweet IDs to the file
+def save_processed_tweets(tweet_ids):
+    with open(PROCESSED_TWEETS_FILE, "w") as file:
         json.dump(list(tweet_ids), file)
 
-# Function to reply to mentions
+# Function to fetch original tweet details
 def reply_to_mentions():
-    replied_tweets = load_replied_tweets()
+    processed_tweets = load_processed_tweets()
 
     try:
         # Search for tweets mentioning your username
         query = "@WhatsHerAt_ -is:retweet"
         mentions = client.search_recent_tweets(
-            query=query, 
-            max_results=10, 
+            query=query,
+            max_results=10,
             tweet_fields=["author_id", "conversation_id", "referenced_tweets"]
         )
 
         if mentions.data:
             for tweet in mentions.data:
-                # Skip tweets already replied to
-                if tweet.id in replied_tweets:
+                # Skip tweets already processed
+                if tweet.id in processed_tweets:
                     continue
 
                 try:
@@ -72,23 +82,42 @@ def reply_to_mentions():
                         original_author = original_tweet.includes["users"][0]
                         original_tweet_link = f"https://twitter.com/{original_author.username}/status/{referenced_tweet_id}"
                         print(f"Original tweet being replied to: {original_tweet_link}")
+
+                        print(f"Processing media from: {original_tweet_link}")
+                        # Download media using yt-dlp
+                        downloaded_media_path = download_twitter_media(original_tweet_link, output_filename="media")
+
+                        if downloaded_media_path:
+                            if downloaded_media_path.endswith('.mp4'):
+                                process_video(downloaded_media_path)  # Process the video
+                            elif downloaded_media_path.endswith(('.jpg', '.png')):
+                                process_image(downloaded_media_path)  # Process the image
+                            else:
+                                print("Unsupported media type.")
+                        else:
+                            print("No media found to download.")
+
+                        image_path = "./face.jpg"
+                        urls = facecheck(image_path)
+                        result = findname(urls)
+
                     else:
                         print("This tweet is not a reply to another tweet.")
-
+                    
                     # Reply to the mention
-                    reply_text = f"Hello! Thanks for the mention!"
+                    reply_text = f"{result}!"
                     client.create_tweet(
                         text=reply_text,
                         in_reply_to_tweet_id=tweet.id
                     )
                     print("Replied successfully!")
-
-                    # Add the tweet ID to the set of replied tweets
-                    replied_tweets.add(tweet.id)
-                    save_replied_tweets(replied_tweets)
+   
+                    # Add the tweet ID to the set of processed tweets
+                    processed_tweets.add(tweet.id)
+                    save_processed_tweets(processed_tweets)
 
                 except Exception as e:
-                    print(f"Error while replying: {e}")
+                    print(f"Error while processing: {e}")
         else:
             print("No new mentions found.")
 
@@ -98,6 +127,234 @@ def reply_to_mentions():
         sleep_time = reset_time - int(time.time())
         print(f"Sleeping for {sleep_time} seconds.")
         time.sleep(max(sleep_time, 0))  # Wait until the limit resets
+
+
+# Function to download Twitter media using yt-dlp
+def download_twitter_media(tweet_url, output_filename="media"):
+    """
+    Downloads media (videos/images) from a given Twitter URL using yt-dlp.
+    """
+    ydl_opts = {
+        'outtmpl': f'{output_filename}.%(ext)s',  # Save as "media.<extension>" in the current folder
+        'format': 'bestvideo+bestaudio/best',  # Download the best quality video with audio
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([tweet_url])
+        print(f"Media downloaded successfully and saved as {output_filename}.")
+        return f"{output_filename}.mp4"  # Return the downloaded file path
+    except Exception as e:
+        print(f"Error downloading media: {e}")
+        return None
+
+
+# Function to process the image, detect faces, and filter by gender
+def process_image(image_path):
+    min_dim = 60
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Failed to load image from {image_path}.")
+        return
+    
+    woman_detected = False
+    try:
+        analysis = DeepFace.analyze(image, actions=['gender'], enforce_detection=False)
+        for face in analysis:
+            gender = face['dominant_gender']
+            print(f"Detected {gender} in the image.")
+            if gender == 'Woman':
+                woman_detected = True
+                print("Saving the woman's face...")
+                region = face['region']
+                x, y, w, h = safe_extract_with_padding(region, image)
+                if w > 0 and h > 0:
+                    cropped_face = image[y:y+h, x:x+w]
+                    if cropped_face.shape[0] < min_dim or cropped_face.shape[1] < min_dim:
+                        cropped_face = cv2.resize(cropped_face, (min_dim, min_dim))
+                    face_filename = 'face.jpg'
+                    cv2.imwrite(face_filename, cropped_face)
+                    print(f"Saved face as {face_filename}")
+                else:
+                    print("Invalid face region dimensions. Skipping cropping.")
+        if not woman_detected:
+            print("No woman was detected in the image.")
+    except Exception as e:
+        print(f"Error during face analysis: {e}")
+
+
+# Function to process the video and detect faces in each frame
+def process_video(video_path):
+    min_dim = 60
+    video_capture = cv2.VideoCapture(video_path)
+    if not video_capture.isOpened():
+        print(f"Error: Unable to open video file {video_path}.")
+        return
+
+    frame_count = 0
+    first_woman_detected = False
+    while True:
+        ret, frame = video_capture.read()
+        if not ret:
+            break
+
+        frame_count += 1
+        print(f"Processing frame {frame_count}...")
+        try:
+            analysis = DeepFace.analyze(frame, actions=['gender'], enforce_detection=False)
+            for face in analysis:
+                gender = face['dominant_gender']
+                print(f"Detected {gender} in the frame.")
+                if gender == 'Woman' and not first_woman_detected:
+                    print("Saving the woman's face...")
+                    region = face['region']
+                    x, y, w, h = safe_extract_with_padding(region, frame)
+                    if w > 0 and h > 0:
+                        cropped_face = frame[y:y+h, x:x+w]
+                        if cropped_face.shape[0] < min_dim or cropped_face.shape[1] < min_dim:
+                            cropped_face = cv2.resize(cropped_face, (min_dim, min_dim))
+                        #face_filename = f"detected_woman_face_{frame_count}.jpg"
+                        face_filename = f"face.jpg"
+                        cv2.imwrite(face_filename, cropped_face)
+                        print(f"Saved face as {face_filename}")
+                        first_woman_detected = True
+                        break
+        except Exception as e:
+            print(f"Error during face analysis in frame {frame_count}: {e}")
+        if first_woman_detected:
+            break
+    if not first_woman_detected:
+        print("No woman was detected in the video.")
+    video_capture.release()
+
+
+# Safely extract x, y, w, h values with padding and ensure they are within bounds
+def safe_extract_with_padding(region, image, min_dim=60, padding=10):
+    img_h, img_w, _ = image.shape
+    x = max(region.get('x', 0) - padding, 0)
+    y = max(region.get('y', 0) - padding, 0)
+    w = region.get('w', 0) + 2 * padding
+    h = region.get('h', 0) + 2 * padding
+    w = min(w, img_w - x)
+    h = min(h, img_h - y)
+    if w < min_dim:
+        w = min_dim
+    if h < min_dim:
+        h = min_dim
+    return x, y, w, h
+
+
+def findname(urls):
+    # Function to extract text from a webpage
+    def extract_text(url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            texts = soup.stripped_strings
+            return ' '.join(texts)
+        except requests.RequestException as e:
+            print(f"Error fetching {url}: {e}")
+            return ""
+
+    # Function to extract name-like sequences (2-3 words starting with capital letters)
+    def extract_names(text):
+        pattern = r'\b([A-Z][a-z]+(?: [A-Z][a-z]+){1,2})\b'
+        # pattern = r'\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)\b'
+        matches = re.findall(pattern, text)
+        return matches
+
+    # Scrape each link and collect potential names
+    all_names = []
+
+    counter = 0
+    print()
+
+    for url in urls:
+        text = extract_text(url)
+        potential_names = extract_names(text)
+        all_names.extend(potential_names)
+        counter += 1
+        print("Going through " + str(counter) + " of " + str(len(urls)))
+        # print(counter)
+
+    # Normalize names (convert to lowercase for counting consistency)
+    normalized_names = [name.lower() for name in all_names]
+
+    # Count the frequency of each name
+    name_counts = Counter(normalized_names)
+
+    # Sort and display the most common names
+    most_common_names = name_counts.most_common(10)
+
+    # prints lists of common names
+    #for name, count in most_common_names:
+        #print(f"{name.title()}: {count}")
+
+    # Load female names from the file
+    with open('females.txt', 'r') as file:
+        female_names = set(name.strip().lower() for name in file.readlines())
+
+    # Check which of the most common names are likely female names
+    female_name_results = []
+    for name, count in most_common_names:
+        # if any(part in female_names for part in name.split()):
+        if name.split()[0].lower() in female_names:
+            female_name_results.append((name.title(), count))
+
+    # Display the female names with counts
+    # print("\nMost common female name:")
+    for name, count in female_name_results:
+        return name
+
+def facecheck(image_file):
+    TESTING_MODE = True
+    load_dotenv()
+    APITOKEN = os.getenv("FACECHECK_API_TOKEN")
+
+    def search_by_face(image_file):
+        if TESTING_MODE:
+            print('****** TESTING MODE search, results are inacurate, and queue wait is long, but credits are NOT deducted ******')
+
+        site='https://facecheck.id'
+        headers = {'accept': 'application/json', 'Authorization': APITOKEN}
+        files = {'images': open(image_file, 'rb'), 'id_search': None}
+        response = requests.post(site+'/api/upload_pic', headers=headers, files=files).json()
+
+        if response['error']:
+            return f"{response['error']} ({response['code']})", None
+
+        id_search = response['id_search']
+        print(response['message'] + ' id_search='+id_search)
+        json_data = {'id_search': id_search, 'with_progress': True, 'status_only': False, 'demo': TESTING_MODE}
+
+        while True:
+            response = requests.post(site+'/api/search', headers=headers, json=json_data).json()
+            if response['error']:
+                return f"{response['error']} ({response['code']})", None
+            if response['output']:
+                return None, response['output']['items']
+            print(f'{response["message"]} progress: {response["progress"]}%')
+            time.sleep(1)
+
+
+    # Search the Internet by face
+    error, urls_images = search_by_face(image_file)
+
+    urls = [] 
+
+    if urls_images:
+        for im in urls_images:      # Iterate search results
+            score = im['score']     # 0 to 100 score how well the face is matching found image
+            url = im['url']         # url to webpage where the person was found
+            image_base64 = im['base64']     # thumbnail image encoded as base64 string
+            #print(f"{score} {url} {image_base64[:32]}...")
+            urls.append(url)
+            if len(urls) >= 10:
+                break
+    else:
+        print(error)
+    
+    return urls
 
 # Continuously check for new mentions
 while True:
