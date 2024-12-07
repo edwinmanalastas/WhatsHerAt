@@ -1,17 +1,16 @@
-import tweepy
-import time
-from dotenv import load_dotenv
 import os
+import time
 import json
+import re
+from collections import Counter
+from dotenv import load_dotenv
 
+import tweepy
 import yt_dlp
 import cv2
 from deepface import DeepFace
-import re
-
 import requests
 from bs4 import BeautifulSoup
-from collections import Counter
 
 load_dotenv()
 BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
@@ -87,9 +86,17 @@ def reply_to_mentions():
                         # Download media using yt-dlp
                         downloaded_media_path = download_twitter_media(original_tweet_link, output_filename="media")
 
+                        # Extract a timestamp if mentioned in the tweet (e.g., "0:39")
+                        tweet_text = tweet.text
+                        start_time = None
+                        timestamp_match = re.search(r'\b(\d+):(\d{2})\b', tweet_text)
+                        if timestamp_match:
+                            start_time = timestamp_match.group(0)
+                            print(f"Extracted start time from tweet: {start_time}")
+
                         if downloaded_media_path:
                             if downloaded_media_path.endswith('.mp4'):
-                                process_video(downloaded_media_path)  # Process the video
+                                process_video(downloaded_media_path, start_time=start_time)  # Pass start time
                             elif downloaded_media_path.endswith(('.jpg', '.png')):
                                 process_image(downloaded_media_path)  # Process the image
                             else:
@@ -105,7 +112,7 @@ def reply_to_mentions():
                         print("This tweet is not a reply to another tweet.")
                     
                     # Reply to the mention
-                    reply_text = f"{result}!"
+                    reply_text = f"{result}"
                     client.create_tweet(
                         text=reply_text,
                         in_reply_to_tweet_id=tweet.id
@@ -183,49 +190,89 @@ def process_image(image_path):
 
 
 # Function to process the video and detect faces in each frame
-def process_video(video_path):
+def process_video(video_path, start_time=None):
     min_dim = 60
+    # Open the video file
     video_capture = cv2.VideoCapture(video_path)
+
     if not video_capture.isOpened():
         print(f"Error: Unable to open video file {video_path}.")
         return
 
+    # If a start time is provided, set the video position
+    if start_time:
+        # Convert the start time (e.g., "0:39") to milliseconds
+        try:
+            minutes, seconds = map(int, start_time.split(":"))
+            start_ms = (minutes * 60 + seconds) * 1000
+            video_capture.set(cv2.CAP_PROP_POS_MSEC, start_ms)
+            print(f"Starting video processing at timestamp {start_time} ({start_ms} ms).")
+        except ValueError:
+            print("Invalid start time format. Use MM:SS format.")
+            return
+
     frame_count = 0
-    first_woman_detected = False
+    first_woman_detected = False  # Flag to check if a woman has already been detected
+
     while True:
+        # Read the next frame from the video
         ret, frame = video_capture.read()
         if not ret:
-            break
+            break  # End of video
 
         frame_count += 1
         print(f"Processing frame {frame_count}...")
+
+        # Use DeepFace to analyze the frame for faces and gender
         try:
             analysis = DeepFace.analyze(frame, actions=['gender'], enforce_detection=False)
+
+            # Filter by gender: Check if the detected person is a woman
             for face in analysis:
                 gender = face['dominant_gender']
                 print(f"Detected {gender} in the frame.")
+
+                # If the face is of a woman and no woman has been detected before
                 if gender == 'Woman' and not first_woman_detected:
                     print("Saving the woman's face...")
+
+                    # Extract the face coordinates safely
                     region = face['region']
+                    # print("Face region details:", region)
+
+                    # Safely extract x, y, w, h values with defaults in case keys are missing         
                     x, y, w, h = safe_extract_with_padding(region, frame)
+
+                    # Check if the dimensions are valid (non-zero width and height)
                     if w > 0 and h > 0:
+
+                        # Crop the face from the frame
                         cropped_face = frame[y:y+h, x:x+w]
+
+                        # Resize if the cropped face is smaller than 60x60
                         if cropped_face.shape[0] < min_dim or cropped_face.shape[1] < min_dim:
                             cropped_face = cv2.resize(cropped_face, (min_dim, min_dim))
-                        #face_filename = f"detected_woman_face_{frame_count}.jpg"
+
+                        # Save the cropped face as a new image
                         face_filename = f"face.jpg"
                         cv2.imwrite(face_filename, cropped_face)
                         print(f"Saved face as {face_filename}")
+
                         first_woman_detected = True
+
+                        print("First woman's face detected. Stopping video processing.")
                         break
+
         except Exception as e:
             print(f"Error during face analysis in frame {frame_count}: {e}")
+
         if first_woman_detected:
             break
     if not first_woman_detected:
         print("No woman was detected in the video.")
+    # Release the video capture object
     video_capture.release()
-
+    print("Video processing complete.")
 
 # Safely extract x, y, w, h values with padding and ensure they are within bounds
 def safe_extract_with_padding(region, image, min_dim=60, padding=10):

@@ -1,6 +1,7 @@
 tweepy
-requests
-Pillow
-deepface
-opencv-python
 python-dotenv
+yt-dlp
+opencv-python
+deepface
+requests
+beautifulsoup4

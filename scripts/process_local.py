@@ -55,7 +55,7 @@ def process_image(image_path):
         return None
     
 # Function to process the video and detect faces in each frame
-def process_video(video_path):
+def process_video(video_path, start_time=None):
     min_dim = 60
     # Open the video file
     video_capture = cv2.VideoCapture(video_path)
@@ -63,6 +63,18 @@ def process_video(video_path):
     if not video_capture.isOpened():
         print(f"Error: Unable to open video file {video_path}.")
         return
+
+    # If a start time is provided, set the video position
+    if start_time:
+        # Convert the start time (e.g., "0:39") to milliseconds
+        try:
+            minutes, seconds = map(int, start_time.split(":"))
+            start_ms = (minutes * 60 + seconds) * 1000
+            video_capture.set(cv2.CAP_PROP_POS_MSEC, start_ms)
+            print(f"Starting video processing at timestamp {start_time} ({start_ms} ms).")
+        except ValueError:
+            print("Invalid start time format. Use MM:SS format.")
+            return
 
     frame_count = 0
     first_woman_detected = False  # Flag to check if a woman has already been detected
@@ -91,7 +103,7 @@ def process_video(video_path):
 
                     # Extract the face coordinates safely
                     region = face['region']
-                    print("Face region details:", region)    
+                    print("Face region details:", region)
 
                     # Safely extract x, y, w, h values with defaults in case keys are missing         
                     x, y, w, h = safe_extract_with_padding(region, frame)
@@ -121,7 +133,8 @@ def process_video(video_path):
 
         if first_woman_detected:
             break
-
+    if not first_woman_detected:
+        print("No woman was detected in the video.")
     # Release the video capture object
     video_capture.release()
     print("Video processing complete.")
@@ -151,7 +164,7 @@ def safe_extract_with_padding(region, image, min_dim=60, padding=10):
     
 if __name__ == "__main__":
     # Path to the image or video
-    input_path = './photo.jpg' 
+    input_path = '../media/forward.mp4' 
 
     # Check if it's an image or a video based on the file extension
     if input_path.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -161,7 +174,7 @@ if __name__ == "__main__":
             print(f"Image at {input_path} does not exist.")
     elif input_path.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
         if os.path.exists(input_path):
-            process_video(input_path)
+            process_video(input_path, start_time="0:39")
         else:
             print(f"Video at {input_path} does not exist.")
     else:

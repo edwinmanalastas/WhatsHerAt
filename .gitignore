@@ -165,3 +165,7 @@ cython_debug/
 media/
 tests/
 .DS_Store
+
+# media files generated
+media.mp4
+face.jpg
