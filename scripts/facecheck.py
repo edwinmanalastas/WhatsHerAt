@@ -48,5 +48,11 @@ if urls_images:
         image_base64 = im['base64']     # thumbnail image encoded as base64 string
         #print(f"{score} {url} {image_base64[:32]}...")
         urls.append(url)
+
+        #if score > 80:
+            #urls.append(url)
+            
+        if len(urls) >= 10:
+            break
 else:
     print(error)

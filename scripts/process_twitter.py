@@ -330,7 +330,7 @@ def safe_extract_with_padding(region, image, min_dim=60, padding=10):
 
 if __name__ == "__main__":
     # Test tweet URL
-    tweet_url = 'https://x.com/TheNBACentel/status/1863993022720942249'  # Replace with the tweet URL for testing
+    tweet_url = 'https://x.com/Amelielavelle/status/1863898534828749166'  # Replace with the tweet URL for testing
     
     # Extract media URL from the tweet
     media_urls = extract_media_url_from_tweet(tweet_url)

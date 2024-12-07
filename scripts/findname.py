@@ -2,23 +2,21 @@ import requests
 from bs4 import BeautifulSoup
 from collections import Counter
 import re
-import time
-from facecheck import urls  # Import urls from facecheck.py
+
+urls = [
+    'youtube.com',
+    'google.com',
+    'facebook.com'
+]
 
 # Function to extract text from a webpage
-def extract_text(url, timeout=10):
+def extract_text(url):
     try:
-        start_time = time.time()  # Start the timer
-        response = requests.get(url, timeout=timeout)  # Timeout in seconds
+        response = requests.get(url)
         response.raise_for_status()
-        elapsed_time = time.time() - start_time  # Measure elapsed time
-        print(f"Scraped {url} in {elapsed_time:.2f} seconds")
         soup = BeautifulSoup(response.text, 'html.parser')
         texts = soup.stripped_strings
         return ' '.join(texts)
-    except requests.Timeout:
-        print(f"Timeout occurred for {url} after {timeout} seconds. Skipping...")
-        return ""
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}")
         return ""
@@ -36,27 +34,13 @@ all_names = []
 counter = 0
 print()
 
-# Measure average scrape time
-scrape_times = []
-
 for url in urls:
-    start_time = time.time()
     text = extract_text(url)
-    elapsed_time = time.time() - start_time
-
-    # Record scrape time and calculate average
-    scrape_times.append(elapsed_time)
-    average_scrape_time = sum(scrape_times) / len(scrape_times)
-    
-    # Skip if the scrape time exceeds the average by a factor (e.g., 1.5x)
-    if elapsed_time > average_scrape_time * 1.5:
-        print(f"Skipping {url} due to long scrape time ({elapsed_time:.2f}s > average {average_scrape_time:.2f}s)")
-        continue
-
     potential_names = extract_names(text)
     all_names.extend(potential_names)
     counter += 1
-    print(f"Processed {counter} of {len(urls)} URLs")
+    print("Going through " + str(counter) + " of " + str(len(urls)))
+    # print(counter)
 
 # Normalize names (convert to lowercase for counting consistency)
 normalized_names = [name.lower() for name in all_names]

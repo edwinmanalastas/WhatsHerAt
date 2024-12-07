@@ -163,5 +163,5 @@ cython_debug/
 
 # Ignore media folder and scripts
 media/
-scripts/
+tests/
 .DS_Store

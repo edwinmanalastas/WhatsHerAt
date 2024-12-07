@@ -3,19 +3,26 @@ import requests
 import time
 from io import BytesIO
 from PIL import Image
+from dotenv import load_dotenv
 import os
 import json
 import re
 
+load_dotenv()
+BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
+CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
+ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
+
 # Twitter API credentials
 client = tweepy.Client(
-    bearer_token='AAAAAAAAAAAAAAAAAAAAACJkxQEAAAAAeMQafWj8B3ipZgXFzqqjdTDIXhA%3DwVrt7ZNaYAdVgovYtsKhv5qbIOQHtZ9Iy6LeCjAFQzIxjCRmV0',
-    consumer_key='JU9roAfJIzPFrS6AkTgiDUd4K',
-    consumer_secret='Vu01eFKoL4TbyyXTt3V7HfZ8m9XBAwu42fgsvIcZuupQd1Drkg',
-    access_token='1864180044115136513-k2KEGgIG6xjIql9FtIYXCAZZeIajBW',
-    access_token_secret='2r1GgQNtwJCXu9YpTxiPLjcmyf83FSiSYl0gmoqPNUHA7'
+    bearer_token=BEARER_TOKEN,
+    consumer_key=CONSUMER_KEY,
+    consumer_secret=CONSUMER_SECRET,
+    access_token=ACCESS_TOKEN,
+    access_token_secret=ACCESS_SECRET
 )
-
 # Function to extract media URL from tweet URL
 def extract_media_url_from_tweet(tweet_url):
     try:
