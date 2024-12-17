@@ -12,6 +12,7 @@ from PIL import Image
 from deepface import DeepFace
 import requests
 from bs4 import BeautifulSoup
+import glob
 
 load_dotenv()
 BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
@@ -85,13 +86,8 @@ def reply_to_mentions():
                         print(f"Original tweet being replied to: {original_tweet_link}")
                         print(f"Processing media from: {original_tweet_link}")
 
-                        # Check and delete old files
-                        if os.path.exists("media_1.mp4"):
-                            os.remove("media.mp4")
-                            print("Deleted old media_1.mp4 file.")
-                        if os.path.exists("face.jpg"):
-                            os.remove("face.jpg")
-                            print("Deleted old face.jpg file.")
+                        #delete before
+                        cleanup_old_files()
 
                         media_urls = []
                         if original_tweet.includes and 'media' in original_tweet.includes:
@@ -502,6 +498,20 @@ def download_parts(url, output_filename):
     print(f"Video downloaded and saved to {output_filename}")
     return output_filename
 
+def cleanup_old_files():
+    # Remove all media files (e.g., media_1.mp4, media_2.mp4, etc.)
+    for file_path in glob.glob("media_*.mp4"):
+        try:
+            os.remove(file_path)
+            print(f"Deleted old file: {file_path}")
+        except Exception as e:
+            print(f"Error deleting {file_path}: {e}")
+
+    # Remove face.jpg if it exists
+    face_path = "face.jpg"
+    if os.path.exists(face_path):
+        os.remove(face_path)
+        print(f"Deleted old file: {face_path}")
 
 # Continuously check for new mentions
 while True:
