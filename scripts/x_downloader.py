@@ -9,13 +9,13 @@ import json
 import re
 
 load_dotenv()
-BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
-CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
-CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
-ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
-ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
+BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
+CONSUMER_KEY = os.getenv("X_CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("X_CONSUMER_SECRET")
+ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+ACCESS_SECRET = os.getenv("X_ACCESS_SECRET")
 
-# Twitter API credentials
+# X API credentials
 client = tweepy.Client(
     bearer_token=BEARER_TOKEN,
     consumer_key=CONSUMER_KEY,

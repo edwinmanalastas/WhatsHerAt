@@ -15,13 +15,13 @@ from bs4 import BeautifulSoup
 import glob
 
 load_dotenv()
-BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
-CONSUMER_KEY = os.getenv("TWITTER_CONSUMER_KEY")
-CONSUMER_SECRET = os.getenv("TWITTER_CONSUMER_SECRET")
-ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
-ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
+BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
+CONSUMER_KEY = os.getenv("X_CONSUMER_KEY")
+CONSUMER_SECRET = os.getenv("X_CONSUMER_SECRET")
+ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+ACCESS_SECRET = os.getenv("X_ACCESS_SECRET")
 
-# Twitter API credentials
+# X API credentials
 client = tweepy.Client(
     bearer_token=BEARER_TOKEN,
     consumer_key=CONSUMER_KEY,
@@ -82,7 +82,7 @@ def reply_to_mentions():
                         )
 
                         original_author = original_tweet.includes["users"][0]
-                        original_tweet_link = f"https://twitter.com/{original_author.username}/status/{referenced_tweet_id}"
+                        original_tweet_link = f"https://x.com/{original_author.username}/status/{referenced_tweet_id}"
                         print(f"Original tweet being replied to: {original_tweet_link}")
                         print(f"Processing media from: {original_tweet_link}")
 
@@ -121,7 +121,7 @@ def reply_to_mentions():
 
                                 downloaded_media_path = download_media(media['url'], media['type'], download_path)
                         else:
-                            print("No media found to download.1")
+                            print("No media found to download")
                         
                          # Extract a timestamp if mentioned in the tweet (e.g., "0:39")
                         tweet_text = tweet.text

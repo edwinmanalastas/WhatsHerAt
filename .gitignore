@@ -164,6 +164,8 @@ cython_debug/
 # Ignore media folder and scripts
 media/
 tests/
+scripts/process_x.py
+
 .DS_Store
 
 # media files generated
