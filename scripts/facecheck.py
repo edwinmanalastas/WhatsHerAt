@@ -8,7 +8,7 @@ load_dotenv()
 APITOKEN = os.getenv("FACECHECK_API_TOKEN")
 
 # Download the photo of the person you want to find
-image_file = '../face.jpg' 
+image_file = './face.jpg' 
 
 def search_by_face(image_file):
     if TESTING_MODE:

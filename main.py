@@ -141,7 +141,7 @@ def reply_to_mentions():
                         else:
                             print("No media found to download.2")
 
-                        image_path = "./face.jpg"
+                        image_path = "./media_1.jpg"
                         urls = facecheck(image_path)
                         result = findname(urls)
 
@@ -499,19 +499,13 @@ def download_parts(url, output_filename):
     return output_filename
 
 def cleanup_old_files():
-    # Remove all media files (e.g., media_1.mp4, media_2.mp4, etc.)
-    for file_path in glob.glob("media_*.mp4"):
+    # Remove all media files (e.g., media_1.mp4, media_2.mp4, media_1.jpg, etc.)
+    for file_path in glob.glob("media_*.mp4") + glob.glob("media_*.jpg"):
         try:
             os.remove(file_path)
             print(f"Deleted old file: {file_path}")
         except Exception as e:
             print(f"Error deleting {file_path}: {e}")
-
-    # Remove face.jpg if it exists
-    face_path = "face.jpg"
-    if os.path.exists(face_path):
-        os.remove(face_path)
-        print(f"Deleted old file: {face_path}")
 
 # Continuously check for new mentions
 while True:
