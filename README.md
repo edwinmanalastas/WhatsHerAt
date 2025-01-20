@@ -7,7 +7,7 @@ This project implements a **X bot** that replies to mentions by:
 - Identifying related online profiles (e.g., Instagram) using a face recognition API.
 - Scraping associated web pages to extract **common names** based on detected links.
 
-The bot is capable of processing media in under 30 seconds and provides an automated response to mentions.
+The bot is capable of processing media in under 30 seconds and provides the identified person's name.
 
 ---
 
